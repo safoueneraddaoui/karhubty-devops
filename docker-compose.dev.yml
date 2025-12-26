@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: karhubty-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-karhubty}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - karhubty-network
+    restart: unless-stopped
+
+  # MailHog Email Testing (Development only)
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: karhubty-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - karhubty-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  karhubty-network:
+    driver: bridge

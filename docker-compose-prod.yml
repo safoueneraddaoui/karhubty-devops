@@ -1,0 +1,61 @@
+# Docker Compose Production Override
+# Use this for production deployments with Brevo
+# Command: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  # Production database with proper backups
+  postgres:
+    environment:
+      # Your secure production password
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      # Optional: backup script
+      - ./backups:/backups
+    restart: always
+
+  # Production backend with Brevo email
+  backend:
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DATABASE=${DB_DATABASE}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=8080
+      - MAX_FILE_SIZE=10485760
+      - UPLOAD_PATH=./uploads
+      - EMAIL_PROVIDER=brevo
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USER=${BREVO_EMAIL}
+      - EMAIL_PASSWORD=${BREVO_SMTP_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - FRONTEND_URL=${FRONTEND_URL}
+      
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Production frontend
+  frontend:
+    environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL}
+    restart: always
+
+  # Remove MailHog for production
+  mailhog:
+    deploy:
+      replicas: 0
+
+volumes:
+  postgres_data_prod:
+    driver: local

@@ -1,0 +1,104 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: karhubty-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-karhubty}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - karhubty-network
+    restart: unless-stopped
+
+  # NestJS Backend
+  backend:
+    build:
+      context: ../
+      dockerfile: karhubty-devops/Dockerfile.backend
+    container_name: karhubty-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-karhubty}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      PORT: 8080
+      EMAIL_PROVIDER: mailhog
+      EMAIL_HOST: mailhog
+      EMAIL_PORT: 1025
+      EMAIL_USER: ''
+      EMAIL_PASSWORD: ''
+      EMAIL_FROM: noreply@karhubty.com
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../karhubty-backend/uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - karhubty-network
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    build:
+      context: ../
+      dockerfile: karhubty-devops/Dockerfile.frontend
+    container_name: karhubty-frontend
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_BASE_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - karhubty-network
+    restart: unless-stopped
+
+  # MailHog Email Testing (Development only)
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: karhubty-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - karhubty-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  karhubty-network:
+    driver: bridge
