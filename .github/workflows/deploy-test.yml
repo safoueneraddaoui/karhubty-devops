@@ -1,0 +1,216 @@
+name: Build & Deploy to Test Environment
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - staging
+          - production
+      backend_ref:
+        description: 'Backend branch/tag (optional)'
+        required: false
+        default: 'develop'
+      frontend_ref:
+        description: 'Frontend branch/tag (optional)'
+        required: false
+        default: 'develop'
+  repository_dispatch:
+    types:
+      - build-and-deploy
+
+env:
+  REGISTRY: docker.io
+  BACKEND_IMAGE: safoueneraddaoui/karhubty-backend
+  FRONTEND_IMAGE: safoueneraddaoui/karhubty-frontend
+  BACKEND_REPO: karhubty-backend
+  FRONTEND_REPO: karhubty-frontend
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      backend-tag: ${{ steps.meta-backend.outputs.tags }}
+    steps:
+      - name: Checkout backend code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ env.BACKEND_REPO }}
+          ref: ${{ github.event.inputs.backend_ref || 'develop' }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata (Backend)
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      frontend-tag: ${{ steps.meta-frontend.outputs.tags }}
+    steps:
+      - name: Checkout frontend code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ env.FRONTEND_REPO }}
+          ref: ${{ github.event.inputs.frontend_ref || 'develop' }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata (Frontend)
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-test:
+    needs: [build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
+    environment:
+      name: test
+    steps:
+      - name: Checkout devops code
+        uses: actions/checkout@v4
+
+      - name: Deploy to test server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.TEST_SERVER_HOST }}
+          username: ${{ secrets.TEST_SERVER_USER }}
+          key: ${{ secrets.TEST_SERVER_SSH_KEY }}
+          port: ${{ secrets.TEST_SERVER_SSH_PORT || 22 }}
+          timeout: 30s
+          command_timeout: 10m
+          script: |
+            set -e
+            echo "🚀 Starting deployment to test environment..."
+            
+            # Navigate to deployment directory
+            cd ${{ secrets.TEST_DEPLOYMENT_PATH || '/opt/karhubty-devops' }}
+            
+            # Pull latest changes
+            echo "📦 Pulling latest code..."
+            git pull origin develop
+            
+            # Create/update .env file if needed
+            if [ ! -f .env ]; then
+              echo "⚠️  .env file not found, creating from template..."
+              cp .env.example .env || echo "❌ No .env.example found, please configure manually"
+            fi
+            
+            # Pull latest images
+            echo "🐳 Pulling latest Docker images..."
+            docker pull ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:develop
+            docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:develop
+            
+            # Stop and remove old containers
+            echo "⏹️  Stopping old containers..."
+            docker-compose -f docker-compose-test.yml down || true
+            
+            # Remove old images
+            echo "🗑️  Cleaning up old images..."
+            docker image prune -f
+            
+            # Start new containers
+            echo "▶️  Starting new containers..."
+            docker-compose -f docker-compose-test.yml up -d
+            
+            # Wait for services to be healthy
+            echo "⏳ Waiting for services to be healthy..."
+            sleep 15
+            
+            # Health checks
+            echo "🏥 Checking service health..."
+            docker-compose -f docker-compose-test.yml ps
+            
+            # Display logs
+            echo "📋 Backend logs (last 20 lines):"
+            docker logs karhubty-backend --tail 20 || true
+            
+            echo "✅ Deployment completed successfully!"
+
+      - name: Notify deployment success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            console.log('✅ Deployment completed successfully!');
+
+      - name: Notify deployment failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            console.log('❌ Deployment failed. Check workflow logs for details.');
