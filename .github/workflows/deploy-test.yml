@@ -152,7 +152,7 @@ jobs:
           port: ${{ secrets.TEST_SERVER_SSH_PORT || 22 }}
           timeout: 30s 
           command_timeout: 10m
-          script: | 
+          script: |
             set -e
             echo "🚀 Starting deployment to test environment..."
             
