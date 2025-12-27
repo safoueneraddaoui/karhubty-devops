@@ -19,11 +19,11 @@ on:
       backend_ref:
         description: 'Backend branch/tag (optional)'
         required: false
-        default: 'develop'
+        default: 'main'
       frontend_ref:
         description: 'Frontend branch/tag (optional)'
         required: false
-        default: 'develop'
+        default: 'main'
   repository_dispatch:
     types:
       - build-and-deploy

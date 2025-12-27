@@ -1,0 +1,112 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: karhubty-postgres
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_DATABASE:-karhubty}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_test:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - karhubty-network
+    restart: always
+
+  # NestJS Backend with Brevo Email
+  backend:
+    image: safoueneraddaoui/karhubty-backend:${BACKEND_VERSION}
+    container_name: karhubty-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env.backend.test
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_DATABASE: ${DB_DATABASE:-karhubty}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key}
+      JWT_EXPIRATION: 24h
+      PORT: 8080
+      MAX_FILE_SIZE: 10485760
+      UPLOAD_PATH: ./uploads
+      # Brevo Email Configuration
+      EMAIL_PROVIDER: brevo
+      EMAIL_HOST: ${EMAIL_HOST:-smtp-relay.brevo.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${BREVO_EMAIL}
+      EMAIL_PASSWORD: ${BREVO_SMTP_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - karhubty-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # React Frontend
+  frontend:
+    image: safoueneraddaoui/karhubty-frontend:${FRONTEND_VERSION}
+    container_name: karhubty-frontend
+    depends_on:
+      - backend
+    env_file: .env.frontend.test
+    environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8080}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - karhubty-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+volumes:
+  postgres_data_test:
+    driver: local
+
+networks:
+  karhubty-network:
+    driver: bridge

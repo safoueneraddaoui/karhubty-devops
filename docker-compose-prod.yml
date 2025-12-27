@@ -51,11 +51,6 @@ services:
       REACT_APP_API_URL: ${REACT_APP_API_URL}
     restart: always
 
-  # Remove MailHog for production
-  mailhog:
-    deploy:
-      replicas: 0
-
 volumes:
-  postgres_data_prod:
+  postgres_data_test:
     driver: local
