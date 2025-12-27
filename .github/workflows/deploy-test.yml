@@ -157,12 +157,11 @@ jobs:
             echo "🚀 Starting deployment to test environment..."
             
             # Navigate to deployment directory
-            cd ${{ secrets.TEST_DEPLOYMENT_PATH || '/opt/karhubty-devops' }}
+            cd ${{ secrets.TEST_DEPLOYMENT_PATH || '/root/karhubty-devops' }}
             
-            # Create/update .env file if needed
-            if [ ! -f .env ]; then
-              echo "⚠️  .env file not found, creating from template..."
-              cp .env.example .env || echo "❌ No .env.example found, please configure manually"
+            # Verify env files exist
+            if [ ! -f .env.backend.test ] || [ ! -f .env.frontend.test ]; then
+              echo "⚠️  Environment files not found, please ensure .env.backend.test and .env.frontend.test exist"
             fi
             
             # Pull latest images
