@@ -150,7 +150,7 @@ jobs:
           username: ${{ secrets.TEST_SERVER_USER }}
           key: ${{ secrets.TEST_SERVER_SSH_KEY }}
           port: ${{ secrets.TEST_SERVER_SSH_PORT || 22 }}
-          timeout: 30s
+          timeout: 30s 
           command_timeout: 10m
           script: |
             set -e
