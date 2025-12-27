@@ -145,10 +145,10 @@ jobs:
 
       - name: Deploy to test server via SSH
         uses: appleboy/ssh-action@v1.0.3
-        with: 
+        with:
           host: ${{ secrets.TEST_SERVER_HOST }}
           username: ${{ secrets.TEST_SERVER_USER }}
-          password: ${{ secrets.TEST_SERVER_PASSWORD }}
+          key: ${{ secrets.TEST_SERVER_SSH_KEY }}
           port: ${{ secrets.TEST_SERVER_SSH_PORT || 22 }}
           timeout: 30s
           command_timeout: 10m
