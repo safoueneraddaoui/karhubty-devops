@@ -51,6 +51,7 @@ jobs:
           ref: ${{ github.event.inputs.backend_ref || 'develop' }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          path: backend
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -76,8 +77,8 @@ jobs:
       - name: Build and push Backend image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./backend
+          file: ./backend/Dockerfile
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
@@ -99,6 +100,7 @@ jobs:
           ref: ${{ github.event.inputs.frontend_ref || 'develop' }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          path: frontend
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
