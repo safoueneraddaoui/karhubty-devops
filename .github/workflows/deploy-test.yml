@@ -3,7 +3,6 @@ name: Build & Deploy to Test Environment
 on:
   push:
     branches:
-      - develop
       - main
   workflow_dispatch:
     inputs:
@@ -48,7 +47,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/${{ env.BACKEND_REPO }}
-          ref: ${{ github.event.inputs.backend_ref || 'develop' }}
+          ref: ${{ github.event.inputs.backend_ref || 'main' }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
           path: backend
@@ -97,7 +96,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/${{ env.FRONTEND_REPO }}
-          ref: ${{ github.event.inputs.frontend_ref || 'develop' }}
+          ref: ${{ github.event.inputs.frontend_ref || 'main' }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
           path: frontend
@@ -126,8 +125,8 @@ jobs:
       - name: Build and push Frontend image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./frontend
+          file: ./frontend/Dockerfile
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
@@ -137,7 +136,7 @@ jobs:
   deploy-test:
     needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
     environment:
       name: test
     steps:
@@ -162,7 +161,7 @@ jobs:
             
             # Pull latest changes
             echo "📦 Pulling latest code..."
-            git pull origin develop
+            git pull origin main
             
             # Create/update .env file if needed
             if [ ! -f .env ]; then
@@ -172,8 +171,8 @@ jobs:
             
             # Pull latest images
             echo "🐳 Pulling latest Docker images..."
-            docker pull ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:develop
-            docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:develop
+            docker pull ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:main
+            docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:main
             
             # Stop and remove old containers
             echo "⏹️  Stopping old containers..."
