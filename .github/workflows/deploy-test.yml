@@ -159,10 +159,6 @@ jobs:
             # Navigate to deployment directory
             cd ${{ secrets.TEST_DEPLOYMENT_PATH || '/opt/karhubty-devops' }}
             
-            # Pull latest changes
-            echo "📦 Pulling latest code..."
-            git pull origin main
-            
             # Create/update .env file if needed
             if [ ! -f .env ]; then
               echo "⚠️  .env file not found, creating from template..."
